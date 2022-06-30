@@ -1,0 +1,41 @@
+name: hashfs
+on: issue_comment
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "Comment on issue #${{ github.event.issue.number }}"
+      - run: |
+          curl \
+            -X POST \
+            --header 'Accept: application/vnd.github.v3+json' \
+            --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+            '${{ github.event.comment.url }}/reactions' \
+            --data '{"content":"eyes"}'
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '^1.17.3'
+      - run: |
+          go version
+          go install github.com/google/ent/cmd/indexer@7874ef4
+      - env:
+          URL: ${{ github.event.comment.body }}
+        run: |
+          export HASH=$(indexer fetch --index=. --url="$URL")
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add .
+          git commit -m "Index $URL"
+          git push
+          export COMMIT=$(git rev-parse HEAD)
+          export BODY="Indexed \`$URL\` in $COMMIT as \`$HASH\`"
+          curl \
+            -X POST \
+            --header 'Accept: application/vnd.github.v3+json' \
+            --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+            '${{ github.event.comment.issue_url }}/comments' \
+            --data "{\"body\":\"$BODY\"}"
+        # Use '${{ github.event.comment.url }}' to edit the existing comment instead.
